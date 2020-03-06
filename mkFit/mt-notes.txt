@@ -1,6 +1,40 @@
+================================================================
+=== Overlaps
+================================================================
 
+T -- ZZZ_TRACK
+label/I:pt/F:eta/F:phi/F:
+nhit_sim/I:nlay_sim/I:nhit_rec/I:nhit_miss_rec/I:novlp/I:novlp_good/I:novlp_bad/I
+
+O -- ZZZ_OVERLAP
+label/I:layer/I:pt/F:eta/F:phi/F:
+chi2/F:chi2_ovlp/F:module/I:module_ovlp/I:hit_label/I:hit_label_ovlp/I
+
+./mkFit --cmssw-n2seeds --input-file ../../mu-hs.bin --build-ce --mtv-like-val --quality-val > extra.txt
+
+perl -ne 'if (/^ZZZ_OVERLAP/) { s/^ZZZ_OVERLAP //og; print; }' extra.txt > ovlp.rtt
+perl -ne 'if (/^ZZZ_TRACK/) { s/^ZZZ_TRACK //og; print; }'     extra.txt > track.rtt
+
+
+root.exe <<FNORD
+
+TFile f("extra.root","recreate")
+
+TTree t
+t.ReadFile("track.rtt")
+t.Write("T")
+
+TTree o
+o.ReadFile("ovlp.rtt")
+o.Write("O")
+
+.q
+FNORD
+
+
+================================================================
 Sim 2018 PU70 sample - hit, module infos
-----------------------------------------
+================================================================
 
 Average number of seeds per event 828.942505
 Average number of hits in layer   0 = 3073.32

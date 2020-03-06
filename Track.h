@@ -30,11 +30,13 @@ struct IdxChi2List
 public:
   int   trkIdx; // candidate index
   int   hitIdx; // hit index
+  unsigned int   module; // module id
   int   nhits;  // number of hits (used for sorting)
   int   nholes;  // number of holes (used for sorting)
   unsigned int seedtype; // seed type idx (used for sorting: 0 = not set; 1 = high pT central seeds; 2 = low pT endcap seeds; 3 = all other seeds)
   float pt;   // pt (used for sorting)
   float chi2;   // total chi2 (used for sorting)
+  float chi2_hit; // chi2 of the added hit
   float score; // score used for candidate ranking
 };
  

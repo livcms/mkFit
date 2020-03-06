@@ -555,8 +555,8 @@ void MkFinder::AddBestHit(const LayerOfHits &layer_of_hits, const int N_proc,
 // FindCandidates - Standard Track Finding
 //==============================================================================
 
-void MkFinder::FindCandidates(const LayerOfHits &layer_of_hits,
-                              std::vector<std::vector<TrackCand>>& tmp_candidates,
+void MkFinder::FindCandidates(const LayerOfHits                   &layer_of_hits,
+                              std::vector<std::vector<TrackCand>> &tmp_candidates,
                               const int offset, const int N_proc,
                               const FindingFoos &fnd_foos)
 {
@@ -644,13 +644,20 @@ void MkFinder::FindCandidates(const LayerOfHits &layer_of_hits,
 	    dprint("chi2 cut passed, creating new candidate");
 	    // Create a new candidate and fill the tmp_candidates output vector.
             // QQQ only instantiate if it will pass, be better than N_best
-	    TrackCand newcand;
+
+            const int hit_idx = XHitArr.At(itrack, hit_cnt, 0);
+
+            TrackCand newcand;
             copy_out(newcand, itrack, iC);
-	    newcand.addHitIdx(XHitArr.At(itrack, hit_cnt, 0), layer_of_hits.layer_id(), chi2);
+	    newcand.addHitIdx(hit_idx, layer_of_hits.layer_id(), chi2);
 	    newcand.setSeedTypeForRanking(SeedType(itrack, 0, 0));
 	    newcand.setScore(getScoreCand(newcand));
+            newcand.setOriginIndex(CandIdx(itrack, 0, 0));
 
-	    dprint("updated track parameters x=" << newcand.parameters()[0] << " y=" << newcand.parameters()[1] << " z=" << newcand.parameters()[2] << " pt=" << 1./newcand.parameters()[3]);
+            CombCandidate &ccand = * newcand.combCandidate();
+            ccand.considerHitForOverlap(CandIdx(itrack, 0, 0), hit_idx, layer_of_hits.GetHit(hit_idx).detIDinLayer(), chi2);
+
+            dprint("updated track parameters x=" << newcand.parameters()[0] << " y=" << newcand.parameters()[1] << " z=" << newcand.parameters()[2] << " pt=" << 1./newcand.parameters()[3]);
 
 	    tmp_candidates[SeedIdx(itrack, 0, 0) - offset].emplace_back(newcand);
 	  }
@@ -688,6 +695,8 @@ void MkFinder::FindCandidates(const LayerOfHits &layer_of_hits,
     newcand.addHitIdx(fake_hit_idx, layer_of_hits.layer_id(), 0.);
     newcand.setSeedTypeForRanking(SeedType(itrack, 0, 0));
     newcand.setScore(getScoreCand(newcand));
+    // Only relevant when we actually add a hit
+    // newcand.setOriginIndex(CandIdx(itrack, 0, 0));
     tmp_candidates[SeedIdx(itrack, 0, 0) - offset].emplace_back(newcand);
   }
 }
@@ -752,14 +761,21 @@ void MkFinder::FindCandidatesCloneEngine(const LayerOfHits &layer_of_hits, CandC
         dprint("chi2=" << chi2 << " for trkIdx=" << itrack << " hitIdx=" << XHitArr.At(itrack, hit_cnt, 0));
         if (chi2 < Config::chi2Cut)
         {
+          const int hit_idx = XHitArr.At(itrack, hit_cnt, 0);
+
+          CombCandidate &ccand = cloner.mp_event_of_comb_candidates->m_candidates[ SeedIdx(itrack, 0, 0) ];
+          ccand.considerHitForOverlap(CandIdx(itrack, 0, 0), hit_idx, layer_of_hits.GetHit(hit_idx).detIDinLayer(), chi2);
+
           IdxChi2List tmpList;
           tmpList.trkIdx   = CandIdx(itrack, 0, 0);
-          tmpList.hitIdx   = XHitArr.At(itrack, hit_cnt, 0);
+          tmpList.hitIdx   = hit_idx;
+          tmpList.module   = layer_of_hits.GetHit(hit_idx).detIDinLayer();
           tmpList.nhits    = NFoundHits(itrack,0,0) + 1;
           tmpList.nholes   = num_all_minus_one_hits(itrack);
           tmpList.seedtype = SeedType(itrack, 0, 0);
-          tmpList.pt       = std::abs(1.0f/Par[iP].At(itrack,3,0));
+          tmpList.pt       = std::abs(1.0f / Par[iP].At(itrack,3,0));
           tmpList.chi2     = Chi2(itrack, 0, 0) + chi2;
+          tmpList.chi2_hit = chi2;
           tmpList.score    = getScoreStruct(tmpList);
           cloner.add_cand(SeedIdx(itrack, 0, 0) - offset, tmpList);
 
@@ -793,11 +809,13 @@ void MkFinder::FindCandidatesCloneEngine(const LayerOfHits &layer_of_hits, CandC
     IdxChi2List tmpList;
     tmpList.trkIdx   = CandIdx(itrack, 0, 0);
     tmpList.hitIdx   = fake_hit_idx;
+    tmpList.module   = -1;
     tmpList.nhits    = NFoundHits(itrack,0,0);
     tmpList.nholes   = num_inside_minus_one_hits(itrack);
     tmpList.seedtype = SeedType(itrack, 0, 0);
-    tmpList.pt       = std::abs(1.0f/Par[iP].At(itrack,3,0));
+    tmpList.pt       = std::abs(1.0f / Par[iP].At(itrack,3,0));
     tmpList.chi2     = Chi2(itrack, 0, 0);
+    tmpList.chi2_hit = 0;
     tmpList.score    = getScoreStruct(tmpList);
     cloner.add_cand(SeedIdx(itrack, 0, 0) - offset, tmpList);
     dprint("adding invalid hit " << fake_hit_idx);
@@ -1004,6 +1022,11 @@ void MkFinder::BkFitFitTracks(const EventOfHits   & eventofhits,
         msPar.CopyIn(i, hit.posArray());
         ++count;
         --CurHit[i];
+
+        // Skip the overlap hit -- if it exists. Overlap hit gets placed *before* the
+        // original hit in TrackCand::exportTrack() -- which is *after* in the reverse
+        // iteration that we are doing here.
+        if (CurHit[i] >= 0 && HoTArr[ i ][ CurHit[i] ].layer == layer) --CurHit[i];
       }
       else
       {
