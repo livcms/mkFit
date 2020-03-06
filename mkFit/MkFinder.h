@@ -132,8 +132,8 @@ public:
 
   //----------------------------------------------------------------------------
 
-  void FindCandidates(const LayerOfHits &layer_of_hits,
-                      std::vector<std::vector<TrackCand>>& tmp_candidates,
+  void FindCandidates(const LayerOfHits                   &layer_of_hits,
+                      std::vector<std::vector<TrackCand>> &tmp_candidates,
 		      const int offset, const int N_proc,
                       const FindingFoos &fnd_foos);
 

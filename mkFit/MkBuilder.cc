@@ -946,6 +946,8 @@ void MkBuilder::quality_reset()
   m_cnt = m_cnt1 = m_cnt2 = m_cnt_8 = m_cnt1_8 = m_cnt2_8 = m_cnt_nomc = 0;
 }
 
+// #define DUMP_OVERLAP_RTTS
+
 void MkBuilder::quality_store_tracks(TrackVec& tracks)
 {
   const EventOfCombCandidates &eoccs = m_event_of_comb_cands; 
@@ -961,6 +963,75 @@ void MkBuilder::quality_store_tracks(TrackVec& tracks)
 
       if (std::isnan(bcand.chi2())) ++chi2_nan_cnt;
       if (bcand.chi2() > 500)       ++chi2_500_cnt;
+
+#ifdef DUMP_OVERLAP_RTTS
+      // DUMP overlap hits
+      int no_good = 0;
+      int no_bad  = 0;
+      int no      = 0; // total, esp for tracks that don't haev good label
+      const HoTNode *hnp = & bcand.refLastHoTNode();
+      while (true)
+      {
+        if (hnp->m_index_ovlp >= 0)
+        {
+          static bool first = true;
+          if (first)
+          {
+            // ./mkFit ... | perl -ne 'if (/^ZZZ_OVERLAP/) { s/^ZZZ_OVERLAP //og; print; }' > ovlp.rtt
+            printf("ZZZ_OVERLAP label/I:layer/I:pt/F:eta/F:phi/F:"
+                   "chi2/F:chi2_ovlp/F:module/I:module_ovlp/I:hit_label/I:hit_label_ovlp/I\n");
+            first = false;
+          }
+
+          auto &LoH = m_event_of_hits.m_layers_of_hits[hnp->m_hot.layer];
+
+          const Hit       &h    = LoH.GetHit(hnp->m_hot.index);
+          const MCHitInfo &mchi = m_event->simHitsInfo_[h.mcHitID()];
+          const Hit       &o    = LoH.GetHit(hnp->m_index_ovlp);
+          const MCHitInfo &mcoi = m_event->simHitsInfo_[o.mcHitID()];
+
+          const TrackBase &bb = (bcand.label() >= 0) ? (const TrackBase &) m_event->simTracks_[bcand.label()] : bcand;
+
+          if (bcand.label() >= 0)
+          {
+            if (bcand.label() == mcoi.mcTrackID()) ++no_good; else ++no_bad;
+          }
+          ++no;
+
+          // label/I:can_idx/I:layer/I:pt/F:eta/F:phi/F:chi2/F:chi2_ovlp/F:module/I:module_ovlp/I:hit_label/I:hit_label_ovlp/I
+          printf("ZZZ_OVERLAP %d %d %f %f %f %f %f %u %u %d %d\n",
+                 bb.label(), hnp->m_hot.layer, bb.pT(), bb.posEta(), bb.posPhi(),
+                 hnp->m_chi2, hnp->m_chi2_ovlp, h.detIDinLayer(), o.detIDinLayer(),
+                 mchi.mcTrackID(), mcoi.mcTrackID());
+        }
+
+        if (hnp->m_prev_idx >= 0)
+          hnp = & eoccs.m_candidates[i].m_hots[hnp->m_prev_idx];
+        else
+          break;
+      }
+
+      if (bcand.label() >= 0)
+      {
+        static bool first = true;
+        if (first)
+        {
+          // ./mkFit ... | perl -ne 'if (/^ZZZ_TRACK/) { s/^ZZZ_TRACK //og; print; }' > track.rtt
+          printf("ZZZ_TRACK label/I:pt/F:eta/F:phi/F:nhit_sim/I:nlay_sim/I:nhit_rec/I:nhit_miss_rec/I:novlp/I:novlp_good/I:novlp_bad/I\n");
+          first = false;
+        }
+
+        const Track &bb = m_event->simTracks_[bcand.label()];
+
+        printf("ZZZ_TRACK %d %f %f %f %d %d %d %d %d %d %d\n",
+               bb.label(), bb.pT(), bb.momEta(), bb.momPhi(),
+               bb.nTotalHits(), bb.nUniqueLayers(),
+               bcand.nFoundHits(), bcand.nMissingHits(),
+               no, no_good, no_bad
+               );
+      }
+      // DUMP END
+#endif
 
       tracks.emplace_back( bcand.exportTrack() );
 
@@ -1725,6 +1796,7 @@ int MkBuilder::find_tracks_unroll_candidates(std::vector<std::pair<int,int>> & s
         {
           active = true;
           seed_cand_vec.push_back(std::pair<int,int>(iseed,ic));
+          ccand.m_overlap_hits[ic].reset();
 
           if (Config::nan_n_silly_check_cands_every_layer)
           {
@@ -1933,6 +2005,37 @@ void MkBuilder::FindTracksStandard()
             bool first_short = true;
             for (size_t ii = 0; ii < tmp_cands[is].size() && n_placed < Config::maxCandsPerSeed; ++ii)
             {
+              // See if we have an overlap hit available, but only if we have a true hit in this layer
+              if (tmp_cands[is][ii].getLastHitLyr() == curr_layer && tmp_cands[is][ii].getLastHitIdx() >= 0)
+              {
+                TrackCand     &tc    = tmp_cands[is][ii];
+                CombCandidate &ccand = eoccs[start_seed+is];
+
+                HitMatch *hm = ccand.findOverlap(tc.originIndex(), tc.getLastHitIdx(), layer_of_hits.GetHit(tc.getLastHitIdx()).detIDinLayer());
+                if (hm)
+                {
+                  tc.refLastHoTNode().m_index_ovlp = hm->m_hit_idx;
+                  tc.refLastHoTNode().m_chi2_ovlp  = hm->m_chi2;
+
+                  // --- ROOT text tree dump of all found overlaps
+                  // static bool first = true;
+                  // if (first)
+                  // {
+                  //   // ./mkFit ... | perl -ne 'if (/^ZZZ_EXTRA/) { s/^ZZZ_EXTRA //og; print; }' > extra.rtt
+                  //   printf("ZZZ_EXTRA label/I:can_idx/I:layer/I:pt/F:eta/F:phi/F:"
+                  //          "chi2/F:chi2_extra/F:module/I:module_extra/I:extra_label/I\n");
+                  //   first = false;
+                  // }
+
+                  // const Hit       &h    = layer_of_hits.GetHit(tc.getLastHitIdx());
+                  // const MCHitInfo &mchi = m_event->simHitsInfo_[h.mcHitID()];
+                  // // label/I:can_idx/I:layer/I:pt/F:eta/F:phi/F:chi2_orig/F:chi2/F:chi2_extra/F:module/I:module_extra/I
+                  // printf("ZZZ_EXTRA %d %d %d %f %f %f %f %f %u %u %d\n",
+                  //        tc.label(), tc.originIndex(), curr_layer, tc.pT(), tc.posEta(), tc.posPhi(),
+                  //        tc.chi2(), hm->m_chi2, layer_of_hits.GetHit(tc.getLastHitIdx()).detIDinLayer(), hm->m_module_id, mchi.mcTrackID());
+                }
+              }
+
               if (tmp_cands[is][ii].getLastHitIdx() != -2)
               {
                 eoccs[start_seed+is].emplace_back(tmp_cands[is][ii]);
