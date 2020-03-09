@@ -946,7 +946,7 @@ void MkBuilder::quality_reset()
   m_cnt = m_cnt1 = m_cnt2 = m_cnt_8 = m_cnt1_8 = m_cnt2_8 = m_cnt_nomc = 0;
 }
 
-// #define DUMP_OVERLAP_RTTS
+#define DUMP_OVERLAP_RTTS
 
 void MkBuilder::quality_store_tracks(TrackVec& tracks)
 {
@@ -978,7 +978,7 @@ void MkBuilder::quality_store_tracks(TrackVec& tracks)
           if (first)
           {
             // ./mkFit ... | perl -ne 'if (/^ZZZ_OVERLAP/) { s/^ZZZ_OVERLAP //og; print; }' > ovlp.rtt
-            printf("ZZZ_OVERLAP label/I:layer/I:pt/F:eta/F:phi/F:"
+            printf("ZZZ_OVERLAP label/I:prod_type/I:is_findable/I:layer/I:pt/F:eta/F:phi/F:"
                    "chi2/F:chi2_ovlp/F:module/I:module_ovlp/I:hit_label/I:hit_label_ovlp/I\n");
             first = false;
           }
@@ -999,8 +999,8 @@ void MkBuilder::quality_store_tracks(TrackVec& tracks)
           ++no;
 
           // label/I:can_idx/I:layer/I:pt/F:eta/F:phi/F:chi2/F:chi2_ovlp/F:module/I:module_ovlp/I:hit_label/I:hit_label_ovlp/I
-          printf("ZZZ_OVERLAP %d %d %f %f %f %f %f %u %u %d %d\n",
-                 bb.label(), hnp->m_hot.layer, bb.pT(), bb.posEta(), bb.posPhi(),
+          printf("ZZZ_OVERLAP %d %d %d %d %f %f %f %f %f %u %u %d %d\n",
+                 bb.label(), (int) bb.prodType(), bb.isFindable(), hnp->m_hot.layer, bb.pT(), bb.posEta(), bb.posPhi(),
                  hnp->m_chi2, hnp->m_chi2_ovlp, h.detIDinLayer(), o.detIDinLayer(),
                  mchi.mcTrackID(), mcoi.mcTrackID());
         }
@@ -1017,14 +1017,14 @@ void MkBuilder::quality_store_tracks(TrackVec& tracks)
         if (first)
         {
           // ./mkFit ... | perl -ne 'if (/^ZZZ_TRACK/) { s/^ZZZ_TRACK //og; print; }' > track.rtt
-          printf("ZZZ_TRACK label/I:pt/F:eta/F:phi/F:nhit_sim/I:nlay_sim/I:nhit_rec/I:nhit_miss_rec/I:novlp/I:novlp_good/I:novlp_bad/I\n");
+          printf("ZZZ_TRACK label/I:prod_type/I:is_findable/I:pt/F:eta/F:phi/F:nhit_sim/I:nlay_sim/I:nhit_rec/I:nhit_miss_rec/I:novlp/I:novlp_good/I:novlp_bad/I\n");
           first = false;
         }
 
         const Track &bb = m_event->simTracks_[bcand.label()];
 
-        printf("ZZZ_TRACK %d %f %f %f %d %d %d %d %d %d %d\n",
-               bb.label(), bb.pT(), bb.momEta(), bb.momPhi(),
+        printf("ZZZ_TRACK %d %d %d %f %f %f %d %d %d %d %d %d %d\n",
+               bb.label(), (int) bb.prodType(), bb.isFindable(), bb.pT(), bb.momEta(), bb.momPhi(),
                bb.nTotalHits(), bb.nUniqueLayers(),
                bcand.nFoundHits(), bcand.nMissingHits(),
                no, no_good, no_bad
