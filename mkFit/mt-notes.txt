@@ -3,17 +3,26 @@
 ================================================================
 
 T -- ZZZ_TRACK
-label/I:pt/F:eta/F:phi/F:
+label/I:prod_type/I:is_findable/I:pt/F:eta/F:phi/F:
 nhit_sim/I:nlay_sim/I:nhit_rec/I:nhit_miss_rec/I:novlp/I:novlp_good/I:novlp_bad/I
 
 O -- ZZZ_OVERLAP
-label/I:layer/I:pt/F:eta/F:phi/F:
+label/I:prod_type/I:is_findable/I:layer/I:pt/F:eta/F:phi/F:
 chi2/F:chi2_ovlp/F:module/I:module_ovlp/I:hit_label/I:hit_label_ovlp/I
+
+ST -- SSS_TRACK
+label/I:prod_type/I:is_findable/I:pt/F:eta/F:phi/F:
+nhit_sim/I:nlay_sim/I:novlp/I:novlp_pix/I:novlp_strip/I:novlp_stereo/I
+
+SO -- SSS_OVERLAP
+label/I:prod_type/I:is_findable/I:layer/I:pt/F:eta/F:phi/F
 
 ./mkFit --cmssw-n2seeds --input-file ../../mu-hs.bin --build-ce --mtv-like-val --quality-val > extra.txt
 
 perl -ne 'if (/^ZZZ_OVERLAP/) { s/^ZZZ_OVERLAP //og; print; }' extra.txt > ovlp.rtt
-perl -ne 'if (/^ZZZ_TRACK/) { s/^ZZZ_TRACK //og; print; }'     extra.txt > track.rtt
+perl -ne 'if (/^ZZZ_TRACK/)   { s/^ZZZ_TRACK //og; print; }'   extra.txt > track.rtt
+perl -ne 'if (/^SSS_OVERLAP/) { s/^SSS_OVERLAP //og; print; }' extra.txt > sim_ovlp.rtt
+perl -ne 'if (/^SSS_TRACK/)   { s/^SSS_TRACK //og; print; }'   extra.txt > sim_track.rtt
 
 
 root.exe <<FNORD
@@ -28,6 +37,13 @@ TTree o
 o.ReadFile("ovlp.rtt")
 o.Write("O")
 
+TTree t
+t.ReadFile("sim_track.rtt")
+t.Write("ST")
+
+TTree o
+o.ReadFile("sim_ovlp.rtt")
+o.Write("SO")
 .q
 FNORD
 

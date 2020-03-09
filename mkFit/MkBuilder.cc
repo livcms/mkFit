@@ -952,6 +952,65 @@ void MkBuilder::quality_store_tracks(TrackVec& tracks)
 {
   const EventOfCombCandidates &eoccs = m_event_of_comb_cands; 
 
+#ifdef DUMP_OVERLAP_RTTS
+
+  // SIMTRACK DUMPERS
+
+  static bool first = true;
+  if (first)
+  {
+    // ./mkFit ... | perl -ne 'if (/^ZZZ_OVERLAP/) { s/^ZZZ_OVERLAP //og; print; }' > ovlp.rtt
+    printf("SSS_OVERLAP label/I:prod_type/I:is_findable/I:layer/I:pt/F:eta/F:phi/F\n");
+
+    printf("SSS_TRACK label/I:prod_type/I:is_findable/I:pt/F:eta/F:phi/F:nhit_sim/I:nlay_sim/I:novlp/I:novlp_pix/I:novlp_strip/I:novlp_stereo/I\n");
+
+    first = false;
+  }
+
+  for (int i = 0; i < (int) m_event->simTracks_.size(); ++i)
+  {
+    Track &bb = m_event->simTracks_[i];
+
+    if (bb.pT() > 0.4)
+    {
+      bb.sortHitsByLayer();
+
+      int no = 0, npix = 0, nstrip = 0, nstereo = 0, prev_lay = -1, last_ovlp = -1;
+
+      for (int hi = 0; hi < bb.nTotalHits(); ++hi)
+      {
+        HitOnTrack hot = bb.getHitOnTrack(hi);
+
+        if (hot.layer == prev_lay && hot.layer != last_ovlp)
+        {
+          last_ovlp = hot.layer;
+
+          ++no;
+
+          const LayerInfo &li = Config::TrkInfo.m_layers[hot.layer];
+
+          if (li.is_pixb_lyr() || li.is_pixe_lyr()) { ++npix; }
+          else                                      { ++nstrip; }
+
+          if (li.is_stereo_lyr()) ++nstereo;
+
+          printf("SSS_OVERLAP %d %d %d %d %f %f %f\n",
+                 bb.label(), (int) bb.prodType(), bb.isFindable(), hot.layer, bb.pT(), bb.posEta(), bb.posPhi());
+        }
+        prev_lay = hot.layer;
+      }
+
+      printf("SSS_TRACK %d %d %d %f %f %f %d %d %d %d %d %d\n",
+             bb.label(), (int) bb.prodType(), bb.isFindable(), bb.pT(), bb.momEta(), bb.momPhi(),
+             bb.nTotalHits(), bb.nUniqueLayers(),
+             no, npix, nstrip, nstereo
+             );
+    }
+
+  }
+
+#endif
+
   int chi2_500_cnt = 0, chi2_nan_cnt = 0;
 
   for (int i = 0; i < eoccs.m_size; i++)
