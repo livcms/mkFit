@@ -112,6 +112,8 @@ void CandCloner::ProcessSeedRange(int is_beg, int is_end)
           tc.refLastHoTNode().m_chi2_ovlp  = hm->m_chi2;
           tc.refLastHoTNode().m_chi2       = h2a.chi2_hit;
 
+          tc.incOverlapCount();
+
           // --- ROOT text tree dump of all found overlaps
           // static bool first = true;
           // if (first)

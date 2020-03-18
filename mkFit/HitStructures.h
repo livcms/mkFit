@@ -367,11 +367,13 @@ public:
   int  lastCcIndex()  const { return lastHitIdx_; }
   int  nFoundHits()   const { return nFoundHits_; }
   int  nMissingHits() const { return nMissingHits_; }
+  int  nOverlapHits() const { return nOverlapHits_; }
   int  nTotalHits()   const { return nFoundHits_ + nMissingHits_; }
 
   void setLastCcIndex(int i)  { lastHitIdx_   = i; }
   void setNFoundHits(int n)   { nFoundHits_   = n; }
   void setNMissingHits(int n) { nMissingHits_ = n; }
+  void setNOverlapHits(int n) { nOverlapHits_ = n; }
 
   int  nInsideMinusOneHits() const { return nInsideMinusOneHits_; }
   int  nTailMinusOneHits()   const { return nTailMinusOneHits_; }
@@ -392,6 +394,7 @@ public:
 
         HoTNode& refLastHoTNode();       // for filling up overlap info
   const HoTNode& refLastHoTNode() const; // for dump traversal
+
   void  incOverlapCount() { ++nOverlapHits_; }
 
   Track exportTrack() const;

@@ -69,10 +69,14 @@ public:
   MPlexQI    CandIdx; // candidate index for the given seed (for bookkeeping of clone engine)
 
   // Additions / substitutions for TrackCand copy_in/out()
-  MPlexQI    NMissingHits;   // sub: NHits, sort of
-  MPlexQI    NInsideMinusOneHits;  // sub: before we copied all hit idcs and had a loop counting them
-  MPlexQI    NTailMinusOneHits;  // sub: before we copied all hit idcs and had a loop counting them
-  MPlexQI    LastHitCcIndex; // add: index of last hit in CombCand hit tree
+  // One could really access the original TrackCand for all of those, especially the ones that
+  // are STD only. This then requires access back to that TrackCand memory.
+  // So maybe one should just have flags for CopyIn methods (or several versions). Yay, etc.
+  MPlexQI    NMissingHits;   // sub: NHits, sort of, STD only
+  MPlexQI    NOverlapHits;   // add: num of overlaps registered in HitOnTrack, STD only
+  MPlexQI    NInsideMinusOneHits;  // sub: before we copied all hit idcs and had a loop counting them only
+  MPlexQI    NTailMinusOneHits;  // sub: before we copied all hit idcs and had a loop counting them only
+  MPlexQI    LastHitCcIndex; // add: index of last hit in CombCand hit tree, STD only
   HitOnTrack LastHoT[NN];
   CombCandidate *CombCand[NN];
   // const TrackCand *TrkCand[NN]; // hmmh, could get all data through this guy ... but scattered
@@ -210,6 +214,7 @@ private:
     LastHitCcIndex(mslot, 0, 0) = trk.lastCcIndex();
     NFoundHits    (mslot, 0, 0) = trk.nFoundHits();
     NMissingHits  (mslot, 0, 0) = trk.nMissingHits();
+    NOverlapHits  (mslot, 0, 0) = trk.nOverlapHits();
 
     NInsideMinusOneHits(mslot, 0, 0) = trk.nInsideMinusOneHits();
     NTailMinusOneHits  (mslot, 0, 0) = trk.nTailMinusOneHits();
@@ -230,6 +235,7 @@ private:
     trk.setLastCcIndex (LastHitCcIndex(mslot, 0, 0));
     trk.setNFoundHits  (NFoundHits    (mslot, 0, 0));
     trk.setNMissingHits(NMissingHits  (mslot, 0, 0));
+    trk.setNOverlapHits(NOverlapHits  (mslot, 0, 0));
 
     trk.setNInsideMinusOneHits(NInsideMinusOneHits(mslot, 0, 0));
     trk.setNTailMinusOneHits  (NTailMinusOneHits  (mslot, 0, 0));

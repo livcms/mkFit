@@ -1017,16 +1017,16 @@ void MkFinder::BkFitFitTracks(const EventOfHits   & eventofhits,
 
       if (CurHit[i] >= 0 && HoTArr[ i ][ CurHit[i] ].layer == layer)
       {
+        // Skip the overlap hit -- if it exists. Overlap hit gets placed *after* the
+        // original hit in TrackCand::exportTrack() -- which is *before* in the reverse
+        // iteration that we are doing here.
+        if (CurHit[i] > 0 && HoTArr[ i ][ CurHit[i] - 1 ].layer == layer) --CurHit[i];
+
         const Hit &hit = L.GetHit( HoTArr[ i ][ CurHit[i] ].index );
         msErr.CopyIn(i, hit.errArray());
         msPar.CopyIn(i, hit.posArray());
         ++count;
         --CurHit[i];
-
-        // Skip the overlap hit -- if it exists. Overlap hit gets placed *before* the
-        // original hit in TrackCand::exportTrack() -- which is *after* in the reverse
-        // iteration that we are doing here.
-        if (CurHit[i] >= 0 && HoTArr[ i ][ CurHit[i] ].layer == layer) --CurHit[i];
       }
       else
       {
