@@ -37,13 +37,13 @@ TTree o
 o.ReadFile("ovlp.rtt")
 o.Write("O")
 
-TTree t
-t.ReadFile("sim_track.rtt")
-t.Write("ST")
+TTree st
+st.ReadFile("sim_track.rtt")
+st.Write("ST")
 
-TTree o
-o.ReadFile("sim_ovlp.rtt")
-o.Write("SO")
+TTree so
+so.ReadFile("sim_ovlp.rtt")
+so.Write("SO")
 .q
 FNORD
 

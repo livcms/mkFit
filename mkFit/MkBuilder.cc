@@ -946,7 +946,7 @@ void MkBuilder::quality_reset()
   m_cnt = m_cnt1 = m_cnt2 = m_cnt_8 = m_cnt1_8 = m_cnt2_8 = m_cnt_nomc = 0;
 }
 
-#define DUMP_OVERLAP_RTTS
+// #define DUMP_OVERLAP_RTTS
 
 void MkBuilder::quality_store_tracks(TrackVec& tracks)
 {
@@ -971,7 +971,7 @@ void MkBuilder::quality_store_tracks(TrackVec& tracks)
   {
     Track &bb = m_event->simTracks_[i];
 
-    if (bb.pT() > 0.4)
+    if (bb.prodType() == Track::ProdType::Signal)
     {
       bb.sortHitsByLayer();
 
@@ -2075,6 +2075,8 @@ void MkBuilder::FindTracksStandard()
                 {
                   tc.refLastHoTNode().m_index_ovlp = hm->m_hit_idx;
                   tc.refLastHoTNode().m_chi2_ovlp  = hm->m_chi2;
+
+                  tc.incOverlapCount();
 
                   // --- ROOT text tree dump of all found overlaps
                   // static bool first = true;
