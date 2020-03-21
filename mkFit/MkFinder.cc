@@ -762,8 +762,13 @@ void MkFinder::FindCandidatesCloneEngine(const LayerOfHits &layer_of_hits, CandC
         {
           const int hit_idx = XHitArr.At(itrack, hit_cnt, 0);
 
-          CombCandidate &ccand = cloner.mp_event_of_comb_candidates->m_candidates[ SeedIdx(itrack, 0, 0) ];
-          ccand.considerHitForOverlap(CandIdx(itrack, 0, 0), hit_idx, layer_of_hits.GetHit(hit_idx).detIDinLayer(), chi2);
+          // Register hit for overlap consieration, here we apply chi2 cut
+          // NOTE --- chi2 cut NOT DONE for STD for comparison.
+          if (chi2 < 4)
+          {
+            CombCandidate &ccand = cloner.mp_event_of_comb_candidates->m_candidates[ SeedIdx(itrack, 0, 0) ];
+            ccand.considerHitForOverlap(CandIdx(itrack, 0, 0), hit_idx, layer_of_hits.GetHit(hit_idx).detIDinLayer(), chi2);
+          }
 
           IdxChi2List tmpList;
           tmpList.trkIdx   = CandIdx(itrack, 0, 0);
