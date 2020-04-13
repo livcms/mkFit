@@ -346,22 +346,35 @@ double runBuildingTestPlexCloneEngine(Event& ev, MkBuilder& builder)
   check_nan_n_silly_candiates(ev);
 
   // first store candidate tracks
-  builder.quality_store_tracks(ev.candidateTracks_);
+  // QQQQ - now after: builder.quality_store_tracks(ev.candidateTracks_);
 
   // now do backwards fit... do we want to time this section?
   if (Config::backwardFit)
   {
     // QQQQ Using the TrackVec version until we home in on THE backward fit etc.
-    // builder.BackwardFit();
-    builder.BackwardFitBH();
+    // builder.BackwardFitBH();
+    builder.BackwardFit();
 
-    check_nan_n_silly_bkfit(ev);
+    // QQQQ has to be done after output to fit tracks
+    // check_nan_n_silly_bkfit(ev);
 
    // QQQQ already done by BackwardFitBH()
    // if (Config::sim_val || Config::cmssw_val || Config::cmssw_export)
-   //  {
+   // {
    //    builder.quality_store_tracks(ev.fitTracks_);
-   //  }
+   // }
+  }
+
+  if (Config::quality_val)
+  {
+    builder.quality_store_tracks(ev.candidateTracks_);
+  }
+
+  if (Config::sim_val || Config::cmssw_val || Config::cmssw_export)
+  {
+    builder.quality_store_tracks(ev.fitTracks_);
+
+    check_nan_n_silly_bkfit(ev);
   }
 
   builder.handle_duplicates();

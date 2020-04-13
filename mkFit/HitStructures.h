@@ -527,6 +527,7 @@ inline const HoTNode& TrackCand::refLastHoTNode() const
 inline void TrackCand::addHitIdx(int hitIdx, int hitLyr, float chi2)
 {
   lastHitIdx_ = m_comb_candidate->AddHit({ hitIdx, hitLyr }, lastHitIdx_);
+
   if (hitIdx >= 0 || hitIdx == -9)
   {
     ++nFoundHits_;
