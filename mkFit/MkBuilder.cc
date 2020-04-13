@@ -2500,7 +2500,7 @@ void MkBuilder::fit_cands_BH(MkFinder *mkfndr, int start_cand, int end_cand, int
     mkfndr->BkFitInputTracks(m_event->candidateTracks_, icand, end);
 
     // perform fit back to first layer on track
-    mkfndr->BkFitFitTracks(m_event_of_hits, st_par, end - icand, chi_debug);
+    mkfndr->BkFitFitTracksBH(m_event_of_hits, st_par, end - icand, chi_debug);
 
     // now move one last time to PCA
     if (Config::includePCA)
@@ -2534,12 +2534,10 @@ void MkBuilder::fit_cands_BH(MkFinder *mkfndr, int start_cand, int end_cand, int
   }
 }
 
+//------------------------------------------------------------------------------
+
 void MkBuilder::BackwardFit()
 {
-  // QQQQ - decide what / how to do it
-
-  assert (false && "Currently not supported");
-
   EventOfCombCandidates &eoccs = m_event_of_comb_cands;
 
   tbb::parallel_for_each(m_regions.begin(), m_regions.end(),
@@ -2566,12 +2564,15 @@ void MkBuilder::fit_cands(MkFinder *mkfndr, int start_cand, int end_cand, int re
   EventOfCombCandidates &eoccs  = m_event_of_comb_cands;
   const SteeringParams  &st_par = m_steering_params[region];
 
-  int step;
+  int step = NN;
+
   for (int icand = start_cand; icand < end_cand; icand += step)
   {
     int end  = std::min(icand + NN, end_cand);
 
     // Check if we need to fragment this for SlurpIn to work.
+    // Would actually prefer to do memory allocator for HoTNode storage.
+    /*
     step = NN;
     {
        int end_c = icand + 1;
@@ -2588,6 +2589,7 @@ void MkBuilder::fit_cands(MkFinder *mkfndr, int start_cand, int end_cand, int re
           ++end_c;
        }
     }
+    */
 
     // printf("Pre Final fit for %d - %d\n", icand, end);
     // for (int i = icand; i < end; ++i) { const Track &t = eoccs[i][0];
@@ -2597,10 +2599,19 @@ void MkBuilder::fit_cands(MkFinder *mkfndr, int start_cand, int end_cand, int re
 
     bool chi_debug = false;
 #ifdef DEBUG_BACKWARD_FIT
-  redo_fit:
+    chi_debug = true;
+    static bool first = true;
+    if (first)
+    {
+      // ./mkFit ... | perl -ne 'if (/^BKF_OVERLAP/) { s/^BKF_OVERLAP //og; print; }' > bkf_ovlp.rtt
+      printf("BKF_OVERLAP event/I:label/I:prod_type/I:is_findable/I:layer/I:pt/F:eta/F:phi/F:chi2/F:isnan/I:isfin/I:gtzero/I:hit_label/I\n");
+      first = false;
+    }
+    mkfndr->m_event = m_event;
 #endif
+
     // input tracks
-    // QQQQQ mkfndr->BkFitInputTracks(eoccs, icand, end);
+    mkfndr->BkFitInputTracks(eoccs, icand, end);
 
     // fit tracks back to first layer
     mkfndr->BkFitFitTracks(m_event_of_hits, st_par, end - icand, chi_debug);
@@ -2611,22 +2622,7 @@ void MkBuilder::fit_cands(MkFinder *mkfndr, int start_cand, int end_cand, int re
       mkfndr->BkFitPropTracksToPCA(end - icand);
     }
     
-#ifdef DEBUG_BACKWARD_FIT
-    // Dump tracks with pT > 2 and chi2/dof > 20. Assumes MPT_SIZE=1.
-    if (! chi_debug && 1.0f/mkfndr->Par[MkBase::iP].At(0,3,0) > 2.0f &&
-        mkfndr->Chi2(0,0,0) / (eoccs[icand][0].nFoundHits() * 3 - 6) > 20.0f)
-    {
-      chi_debug = true;
-      printf("CHIHDR Event %d, Cand %3d, pT %f, chipdof %f ### NOTE x,y,z in cm, sigmas, deltas in mum ### !!!\n",
-             m_event->evtID(), icand, 1.0f/mkfndr->Par[MkBase::iP].At(0,3,0),
-             mkfndr->Chi2(0,0,0) / (eoccs[icand][0].nFoundHits() * 3 - 6));
-      printf("CHIHDR %3s %10s %10s %10s %10s %10s %11s %11s %11s %10s %10s %10s %10s %11s %11s %11s %10s %10s %10s %10s %10s %11s %11s\n",
-             "lyr","chi2","x_h","y_h","z_h","r_h","sx_h","sy_h","sz_h","x_t","y_t","z_t","r_t","sx_t","sy_t","sz_t","pt","phi","theta","phi_h","phi_t","d_xy","d_z");
-      goto redo_fit;
-    }
-#endif
-
-    // QQQQQ mkfndr->BkFitOutputTracks(eoccs, icand, end);
+    mkfndr->BkFitOutputTracks(eoccs, icand, end);
 
     // printf("Post Final fit for %d - %d\n", icand, end);
     // for (int i = icand; i < end; ++i) { const Track &t = eoccs[i][0];

@@ -5,10 +5,14 @@
 #include "TrackerInfo.h"
 #include "Track.h"
 
-//#include "Event.h"
-
 // Needed for TrackCand
 #include "HitStructures.h"
+
+// Define to get printouts about track and hit chi2.
+// See also MkBuilder::BackwardFit() and MkBuilder::quality_store_tracks().
+
+// #define DEBUG_BACKWARD_FIT
+
 
 namespace mkfit {
 
@@ -21,6 +25,10 @@ class FindingFoos;
 class EventOfHits;
 class EventOfCombCandidates;
 class SteeringParams;
+
+#ifdef DEBUG_BACKWARD_FIT
+class Event;
+#endif
 
 // NOTES from MkFitter ... where things were getting super messy.
 //
@@ -38,12 +46,6 @@ class SteeringParams;
 // Changes will go into all finding functions + import-with-hit-idcs.
 //
 // Actually ... am tempted to make MkFinder :)
-
-
-// Define to get printouts about track and hit chi2.
-// See also MkBuilder::BackwardFit() and MkBuilder::quality_store_tracks().
-
-// #define DEBUG_BACKWARD_FIT
 
 
 class MkFinder : public MkBase
@@ -80,6 +82,12 @@ public:
   HitOnTrack LastHoT[NN];
   CombCandidate *CombCand[NN];
   // const TrackCand *TrkCand[NN]; // hmmh, could get all data through this guy ... but scattered
+  // storing it in now for bkfit debug printouts
+  TrackCand *TrkCand[NN];
+  // XXXX - for bk-fit debug
+#ifdef DEBUG_BACKWARD_FIT
+  Event     *m_event;
+#endif
 
   // Hit indices into LayerOfHits to explore.
   WSR_Result  XWsrResult[NN]; // Could also merge it with XHitSize. Or use smaller arrays.
@@ -159,12 +167,17 @@ public:
   int               CurHit[NN];
   const HitOnTrack *HoTArr[NN];
 
+  int               CurNode[NN];
+  HoTNode          *HoTNodeArr[NN]; // Not const as we can modify it!
+
   void BkFitInputTracks (TrackVec& cands, int beg, int end);
   void BkFitOutputTracks(TrackVec& cands, int beg, int end);
 
-  // QQQQQ - out until further notice
-  // void BkFitInputTracks (EventOfCombCandidates& eocss, int beg, int end);
-  // void BkFitOutputTracks(EventOfCombCandidates& eocss, int beg, int end);
+  void BkFitInputTracks (EventOfCombCandidates& eocss, int beg, int end);
+  void BkFitOutputTracks(EventOfCombCandidates& eocss, int beg, int end);
+
+  void BkFitFitTracksBH(const EventOfHits& eventofhits, const SteeringParams& st_par,
+                        const int N_proc, bool chiDebug = false);
 
   void BkFitFitTracks(const EventOfHits& eventofhits, const SteeringParams& st_par,
                       const int N_proc, bool chiDebug = false);

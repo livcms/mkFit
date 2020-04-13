@@ -11,6 +11,10 @@
 //#define DEBUG
 #include "Debug.h"
 
+#ifdef DEBUG_BACKWARD_FIT
+#include "Event.h"
+#endif
+
 namespace mkfit {
 
 //==============================================================================
@@ -880,8 +884,7 @@ void MkFinder::CopyOutParErr(std::vector<CombCandidate>& seed_cand_vec,
 
 void MkFinder::BkFitInputTracks(TrackVec& cands, int beg, int end)
 {
-  // SlurpIn based on XHit array - so Nhits is irrelevant.
-  // Could as well use HotArrays from tracks directly + a local cursor array to last hit.
+  // Uses HitOnTrack vector from Track directly + a local cursor array to current hit.
 
   MatriplexTrackPacker mtp(cands[beg]);
 
@@ -905,16 +908,12 @@ void MkFinder::BkFitInputTracks(TrackVec& cands, int beg, int end)
   Err[iC].Scale(100.0f);
 }
 
-//------------------------------------------------------------------------------
-
-/* QQQQ - out until further notice
-
 void MkFinder::BkFitInputTracks(EventOfCombCandidates& eocss, int beg, int end)
 {
-  // XXXX Can cause trouble if per-seed vectors get scattered beyond 2GB (or maybe 8).
-
-  // SlurpIn based on XHit array - so Nhits is irrelevant.
   // Could as well use HotArrays from tracks directly + a local cursor array to last hit.
+
+  // XXXX - shall we assume only TrackCand-zero is needed and that we can freely
+  // bork the HoTNode array?
 
   MatriplexTrackPacker mtp(eocss[beg][0]);
 
@@ -922,11 +921,15 @@ void MkFinder::BkFitInputTracks(EventOfCombCandidates& eocss, int beg, int end)
 
   for (int i = beg; i < end; ++i, ++itrack)
   {
-    const Track &trk = eocss[i][0];
+    const TrackCand &trk = eocss[i][0];
 
-    Chg(itrack, 0, 0) = trk.charge();
-    CurHit[itrack]    = trk.nTotalHits() - 1;
-    HoTArr[itrack]    = trk.getHitsOnTrackArray();
+    Chg(itrack, 0, 0)  = trk.charge();
+    CurNode[itrack]    = trk.lastCcIndex();
+    HoTNodeArr[itrack] = trk.combCandidate()->m_hots.data();
+
+    // XXXX Need TrackCand* to update num-hits. Unless I collect info elsewhere
+    // and fix it in BkFitOutputTracks.
+    TrkCand[itrack]    = & eocss[i][0];
 
     mtp.AddInput(trk);
   }
@@ -937,7 +940,8 @@ void MkFinder::BkFitInputTracks(EventOfCombCandidates& eocss, int beg, int end)
 
   Err[iC].Scale(100.0f);
 }
-*/
+
+//------------------------------------------------------------------------------
 
 void MkFinder::BkFitOutputTracks(TrackVec& cands, int beg, int end)
 {
@@ -952,18 +956,18 @@ void MkFinder::BkFitOutputTracks(TrackVec& cands, int beg, int end)
       Par[iP].CopyOut(itrack, trk.parameters_nc().Array());
 
       trk.setChi2(Chi2(itrack, 0, 0));
-      if(!(std::isnan(trk.chi2())))
+      if ( ! std::isnan(trk.chi2()))
       {
 	trk.setScore(getScoreCand(trk));
       }
     }
 }
 
-/* QQQQ - out until further notice
-
 void MkFinder::BkFitOutputTracks(EventOfCombCandidates& eocss, int beg, int end)
 {
   // Only copy out track params / errors / chi2, all the rest is ok.
+
+  // XXXX - where will rejected hits get removed?
 
   int itrack = 0;
   for (int i = beg; i < end; ++i, ++itrack)
@@ -974,27 +978,22 @@ void MkFinder::BkFitOutputTracks(EventOfCombCandidates& eocss, int beg, int end)
     Par[iP].CopyOut(itrack, trk.parameters_nc().Array());
 
     trk.setChi2(Chi2(itrack, 0, 0));
-    if(!(std::isnan(trk.chi2())))
+    if ( ! std::isnan(trk.chi2()))
     {
       trk.setScore(getScoreCand(trk));
     }
   }
 }
-*/
 
-
-} // end namespace mkfit
 //------------------------------------------------------------------------------
 
 #ifdef DEBUG_BACKWARD_FIT
 namespace { float e2s(float x) { return 1e4 * std::sqrt(x); } }
 #endif
 
-namespace mkfit {
-
-void MkFinder::BkFitFitTracks(const EventOfHits   & eventofhits,
-                              const SteeringParams& st_par,
-                              const int N_proc, bool chiDebug)
+void MkFinder::BkFitFitTracksBH(const EventOfHits   & eventofhits,
+                                const SteeringParams& st_par,
+                                const int N_proc, bool chiDebug)
 {
   // Prototyping final backward fit.
   // This works with track-finding indices, before remapping.
@@ -1095,6 +1094,153 @@ void MkFinder::BkFitFitTracks(const EventOfHits   & eventofhits,
     Chi2.Add(tmp_chi2);
   }
 }
+
+//------------------------------------------------------------------------------
+
+void MkFinder::BkFitFitTracks(const EventOfHits   & eventofhits,
+                              const SteeringParams& st_par,
+                              const int N_proc, bool chiDebug)
+{
+  // Prototyping final backward fit.
+  // This works with track-finding indices, before remapping.
+  //
+  // Layers should be collected during track finding and list all layers that have actual hits.
+  // Then we could avoid checking which layers actually do have hits.
+
+  MPlexQF  tmp_chi2;
+  float    tmp_err[6] = { 666, 0, 666, 0, 0, 666 };
+  float    tmp_pos[3];
+
+  for (auto lp_iter = st_par.m_layer_plan.rbegin(); lp_iter != st_par.m_layer_plan.rend(); ++lp_iter)
+  {
+    const int layer = lp_iter->m_layer;
+
+    const LayerOfHits &L  =   eventofhits.m_layers_of_hits[layer];
+    const LayerInfo   &LI = * L.m_layer_info;
+
+    // XXXX
+#ifdef DEBUG_BACKWARD_FIT
+    const Hit *last_hit_ptr[NN];
+#endif
+
+    int count = 0;
+    for (int i = 0; i < N_proc; ++i)
+    {
+      while (CurNode[i] >= 0 && HoTNodeArr[ i ][ CurNode[i] ].m_hot.index < 0)
+      {
+        CurNode[i] = HoTNodeArr[ i ][ CurNode[i] ].m_prev_idx;
+      }
+
+      if (CurNode[i] >= 0 && HoTNodeArr[ i ][ CurNode[i] ].m_hot.layer == layer)
+      {
+        // XXXX - this is now different - overlap info has not yet been exported
+
+        // XXXX Note if I remove this hit (i.e., m_hot.index = -1), the overlap might stay.
+        //      Need to account for this in exportTrack().
+
+        const Hit &hit = L.GetHit( HoTNodeArr[ i ][ CurNode[i] ].m_hot.index );
+
+        // XXXX
+#ifdef DEBUG_BACKWARD_FIT
+        last_hit_ptr[i] = & hit;
+#endif
+        msErr.CopyIn(i, hit.errArray());
+        msPar.CopyIn(i, hit.posArray());
+        ++count;
+
+        CurNode[i] = HoTNodeArr[ i ][ CurNode[i] ].m_prev_idx;
+      }
+      else
+      {
+        // XXXX
+#ifdef DEBUG_BACKWARD_FIT
+        last_hit_ptr[i] = nullptr;
+#endif
+        tmp_pos[0] = Par[iC](i, 0, 0);
+        tmp_pos[1] = Par[iC](i, 1, 0);
+        tmp_pos[2] = Par[iC](i, 2, 0);
+        msErr.CopyIn(i, tmp_err);
+        msPar.CopyIn(i, tmp_pos);
+      }
+    }
+
+    if (count == 0) continue;
+
+    // ZZZ Could add missing hits here, only if there are any actual matches.
+
+    if (LI.is_barrel())
+    {
+      PropagateTracksToHitR(msPar, N_proc, Config::backward_fit_pflags);
+
+      kalmanOperation(KFO_Calculate_Chi2 | KFO_Update_Params,
+                      Err[iP], Par[iP], msErr, msPar, Err[iC], Par[iC], tmp_chi2, N_proc);
+    }
+    else
+    {
+      PropagateTracksToHitZ(msPar, N_proc, Config::backward_fit_pflags);
+
+      kalmanOperationEndcap(KFO_Calculate_Chi2 | KFO_Update_Params,
+                            Err[iP], Par[iP], msErr, msPar, Err[iC], Par[iC], tmp_chi2, N_proc);
+    }
+
+    for (int i = 0; i < N_proc; ++i)
+    {
+#ifdef DEBUG_BACKWARD_FIT
+      if (chiDebug && last_hit_ptr[i])
+      {
+        TrackCand &bb = * TrkCand[i];
+        // int ti = iP;
+        float chi = tmp_chi2.At(i, 0, 0);
+        float chi_prnt = std::isfinite(chi) ? chi : -9;
+
+        const MCHitInfo &mchi = m_event->simHitsInfo_[ last_hit_ptr[i]->mcHitID() ];
+
+        printf("BKF_OVERLAP %d %d %d %d %d %f %f %f %f %d %d %d %d\n", m_event->evtID(),
+               bb.label(), (int) bb.prodType(), bb.isFindable(), layer,
+               bb.pT(),
+               bb.posEta(),
+               bb.posPhi(),
+               chi_prnt, std::isnan(chi), std::isfinite(chi), chi > 0,
+               mchi.mcTrackID());
+      }
+#endif
+
+      // XXXX  Remove hit
+      // const float CHI2_BKFIT_CUT = 1000;
+      if (false) // (std::isnan(tmp_chi2.At(i, 0, 0)) || tmp_chi2.At(i, 0, 0) > CHI2_BKFIT_CUT)
+      {
+        // QQQQQ This is wrong -- cur node already increased: !!!!!
+        // QQQQQ HoTNodeArr[ i ][ CurNode[i] ].m_hot.index = -4; // XXXX A new value or use -1 ???
+
+        // XXXX Should I reduce num hits in TrackCand?
+
+        Par[iC].CopySlot(i, Par[iP]);
+        Err[iC].CopySlot(i, Err[iP]);
+
+        tmp_chi2.At(i, 0, 0) = 0;
+      }
+    }
+
+    // ZZZ If we want to do chi2 rejection during backward fit, either:
+    //     a) Copy pre-parameters over the input here.
+    //     b) Pass no-hit information to kalmanOperation so it can override it.
+    //  b) is probably better as there is less copying involved, 3x3 vs, 6x6.
+    // Nope, can't do ... intermediate results calculated for chi2 are used for update.
+    // So need to do a)
+    //
+    // Then, when we reject a hit, what do we do with it, remove it?
+    // Or replace with some new index, say -4?
+    //   In this case need to check how bad/good hits are counted (this will be like -3). Messy for sure.
+    // What happens with the potential overlap hit?
+    // - Fit it? Ususally there will be a single track. Hmmh.
+    // - Promote it to main hit without fitting.
+
+    // update chi2
+    Chi2.Add(tmp_chi2);
+  }
+}
+
+//------------------------------------------------------------------------------
 
 void MkFinder::BkFitPropTracksToPCA(const int N_proc)
 {
