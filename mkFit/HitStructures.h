@@ -449,12 +449,12 @@ public:
   int                  m_hots_size = 0;
   std::vector<HoTNode> m_hots;
 
-  std::vector<HitMatchPair> m_overlap_hits;
+  std::vector<HitMatchPair> m_overlap_hits; // XXXX HitMatchPair could be a member in TrackCand
 
 
   CombCandidate()
   {
-    reserve(Config::maxCandsPerSeed); // we should never exceed this
+    reserve(Config::maxCandsPerSeed); // we should never exceed this - XXXX check, enforce, use common storage per event
     m_best_short_cand.setScore( getScoreWorstPossible() );
 
     // this will be different for CloneEngine and Std, especially as long as we

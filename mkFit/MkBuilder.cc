@@ -1102,7 +1102,8 @@ void MkBuilder::quality_store_tracks(TrackVec& tracks)
     }
   }
 
-  if (!Config::silent && (chi2_500_cnt > 0 || chi2_nan_cnt > 0)) {
+  if ( ! Config::silent && (chi2_500_cnt > 0 || chi2_nan_cnt > 0))
+  {
     std::lock_guard<std::mutex> printlock(Event::printmutex);
     printf("MkBuilder::quality_store_tracks bad track chi2 (backward fit?). is-nan=%d, gt-500=%d.\n", chi2_nan_cnt, chi2_500_cnt);
   }
@@ -2581,9 +2582,10 @@ void MkBuilder::fit_cands(MkFinder *mkfndr, int start_cand, int end_cand, int re
           // Still crashes with 0x1fffffff and 0x1ffffff, 0x1fffff works (~2000 breaks over 5k high PU events)
           if (std::abs(&eoccs[icand][0] - &eoccs[end_c][0]) > 0x1fffff)
           {
-             if(!Config::silent) printf("XXYZZ MkBuilder::fit_cands Breaking up candidates with offset outside of 32-bit range.\n");
              end  = end_c;
              step = end - icand;
+             if ( ! Config::silent)
+               printf("XXYZZ MkBuilder::fit_cands Breaking up candidates with offset outside of 32-bit range, step=%d.\n", step);
              break;
           }
           ++end_c;
