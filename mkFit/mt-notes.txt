@@ -49,6 +49,13 @@ f.Close()
 .q
 FNORD
 
+
+----------------------------------------------------------------
+=== BkFit
+----------------------------------------------------------------
+
+./mkFit --cmssw-n2seeds --input-file ../../pu50-ccc-hs.bin --build-ce --mtv-like-val --quality-val --num-events 1000 --backward-fit | perl -ne 'if (/^BKF_OVERLAP/) { s/^BKF_OVERLAP //og; print; }' > bkf_ovlp.rtt
+
 TFile f("bkf.root","recreate")
 
 TTree t

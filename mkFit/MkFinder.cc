@@ -255,6 +255,7 @@ void MkFinder::SelectHitIndices(const LayerOfHits &layer_of_hits,
 
       const float z  = Par[iI].ConstAt(itrack, 2, 0);
       const float dz = std::abs(nSigmaZ * std::sqrt(Err[iI].ConstAt(itrack, 2, 2)));
+      // XXX-NUM-ERR above, Err(2,2) gets negative!
 
       // NOTE -- once issues in this block are resolved the changes should also be
       // ported to MkFinderFV.
@@ -499,7 +500,7 @@ void MkFinder::AddBestHit(const LayerOfHits &layer_of_hits, const int N_proc,
       msPar(itrack,2,0) = Par[iP](itrack,2,0);
 
       // XXXX If not in gap, should get back the old track params. But they are gone ...
-      // Would actually have to do it right after SelectHitIndices where update params are still ok.
+      // Would actually have to do it right after SelectHitIndices where updated params are still ok.
       // Here they got screwed during hit matching.
       // So, I'd store them there (into propagated params) and retrieve them here.
       // Or we decide not to care ...
@@ -761,7 +762,9 @@ void MkFinder::FindCandidatesCloneEngine(const LayerOfHits &layer_of_hits, CandC
 
       if (hit_cnt < XHitSize[itrack])
       {
-        const float chi2 = fabs(outChi2[itrack]);//fixme negative chi2 sometimes...
+        // XXX-NUM-ERR assert(chi2 >= 0);
+        const float chi2 = std::abs(outChi2[itrack]); //fixme negative chi2 sometimes...
+
         dprint("chi2=" << chi2 << " for trkIdx=" << itrack << " hitIdx=" << XHitArr.At(itrack, hit_cnt, 0));
         if (chi2 < Config::chi2Cut)
         {
@@ -769,7 +772,7 @@ void MkFinder::FindCandidatesCloneEngine(const LayerOfHits &layer_of_hits, CandC
 
           // Register hit for overlap consieration, here we apply chi2 cut
           // NOTE --- chi2 cut NOT DONE for STD for comparison.
-          if (chi2 < 4)
+          if (chi2 < 3.5)
           {
             CombCandidate &ccand = cloner.mp_event_of_comb_candidates->m_candidates[ SeedIdx(itrack, 0, 0) ];
             ccand.considerHitForOverlap(CandIdx(itrack, 0, 0), hit_idx, layer_of_hits.GetHit(hit_idx).detIDinLayer(), chi2);
@@ -989,7 +992,7 @@ void MkFinder::BkFitOutputTracks(EventOfCombCandidates& eocss, int beg, int end)
 
 //------------------------------------------------------------------------------
 
-#ifdef DEBUG_BACKWARD_FIT
+#if defined(DEBUG_BACKWARD_FIT) || defined(DEBUG_BACKWARD_FIT_BH)
 namespace { float e2s(float x) { return 1e4 * std::sqrt(x); } }
 #endif
 
@@ -1061,7 +1064,7 @@ void MkFinder::BkFitFitTracksBH(const EventOfHits   & eventofhits,
                             Err[iP], Par[iP], msErr, msPar, Err[iC], Par[iC], tmp_chi2, N_proc);
     }
 
-#ifdef DEBUG_BACKWARD_FIT
+#ifdef DEBUG_BACKWARD_FIT_BH
     // Dump per hit chi2
     for (int i = 0; i < N_proc; ++i)
     {
@@ -1191,19 +1194,26 @@ void MkFinder::BkFitFitTracks(const EventOfHits   & eventofhits,
       if (chiDebug && last_hit_ptr[i])
       {
         TrackCand &bb = * TrkCand[i];
-        // int ti = iP;
+        int   ti  = iP;
         float chi = tmp_chi2.At(i, 0, 0);
         float chi_prnt = std::isfinite(chi) ? chi : -9;
 
         const MCHitInfo &mchi = m_event->simHitsInfo_[ last_hit_ptr[i]->mcHitID() ];
 
-        printf("BKF_OVERLAP %d %d %d %d %d %f %f %f %f %d %d %d %d\n", m_event->evtID(),
-               bb.label(), (int) bb.prodType(), bb.isFindable(), layer,
+        printf("BKF_OVERLAP %d %d %d %d %d %d %d "
+               "%f %f %f %f %d %d %d %d "
+               "%f %f %f %f %f\n",
+               m_event->evtID(),
+               bb.label(), (int) bb.prodType(), bb.isFindable(), layer, L.is_stereo_lyr(), L.is_barrel(),
                bb.pT(),
                bb.posEta(),
                bb.posPhi(),
                chi_prnt, std::isnan(chi), std::isfinite(chi), chi > 0,
-               mchi.mcTrackID());
+               mchi.mcTrackID(),
+               e2s(Err[ti].At(i,0,0)), e2s(Err[ti].At(i,1,1)), e2s(Err[ti].At(i,2,2)),      // sx_t sy_t sz_t -- track errors
+               1e4f * std::hypot(msPar.At(i,0,0) - Par[ti].At(i,0,0), msPar.At(i,1,0) - Par[ti].At(i,1,0)),  // d_xy
+               1e4f * (msPar.At(i,2,0) - Par[ti].At(i,2,0)) // d_z
+               );
       }
 #endif
 

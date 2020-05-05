@@ -132,7 +132,7 @@ namespace
               << " posZ=" << seed.z() << " pT=" << seed.pT() << std::endl;
   }
 
-  void print_seed2(const Track& seed) {
+  void print_seed2(const TrackCand& seed) {
     std::cout << "MX - found seed with nFoundHits=" << seed.nFoundHits() << " chi2=" << seed.chi2() 
               << " x=" << seed.x() << " y=" << seed.y() << " z=" << seed.z()
               << " px=" << seed.px() << " py=" << seed.py() << " pz=" << seed.pz()
@@ -289,14 +289,14 @@ void MkBuilder::begin_event(Event* ev, const char* build_type)
   //dump sim tracks
   for (int itrack = 0; itrack < (int) simtracks.size(); ++itrack)
   {
-    bool debug = true;
+    // bool debug = true;
     Track track = simtracks[itrack];
-    //if (track.label() != itrack)
-    //{
-    //dprintf("Bad label for simtrack %d -- %d\n", itrack, track.label());
-    //}
+    // if (track.label() != itrack) {
+    //   dprintf("Bad label for simtrack %d -- %d\n", itrack, track.label());
+    // }
+
     dprint("MX - simtrack with nHits=" << track.nFoundHits() << " chi2=" << track.chi2()
-              << " pT=" << track.pT() <<" phi="<< track.momPhi() <<" eta=" << track.momEta());
+           << " pT=" << track.pT() <<" phi="<< track.momPhi() <<" eta=" << track.momEta());
   }
 #endif
 
@@ -1094,7 +1094,7 @@ void MkBuilder::quality_store_tracks(TrackVec& tracks)
 
       tracks.emplace_back( bcand.exportTrack() );
 
-#ifdef DEBUG_BACKWARD_FIT
+#ifdef DEBUG_BACKWARD_FIT_BH
       printf("CHITRK %d %g %g %g %g %g\n",
              bcand.nFoundHits(), bcand.chi2(), bcand.chi2() / (bcand.nFoundHits() * 3 - 6),
              bcand.pT(), bcand.momPhi(), bcand.theta());
@@ -1167,7 +1167,7 @@ void MkBuilder::quality_process(Track &tkcand, const int itrack, std::map<int,in
   }
 
 #ifdef SELECT_SEED_LABEL
-  if (label == SELECT_SEED_LABEL) track_print(tkcand, "SELECTED LABEL:");
+  if (label == SELECT_SEED_LABEL) track_print(tkcand, "MkBuilder::quality_process SELECT_SEED_LABEL:");
 #endif
 
   float pTcmssw = 0.f, etacmssw = 0.f, phicmssw = 0.f;
@@ -1890,32 +1890,42 @@ void MkBuilder::find_tracks_handle_missed_layers(MkFinder *mkfndr, const LayerIn
 {
   // XXXX-1 If I miss a layer, insert the original track into tmp_cands
   // AND do not do it in FindCandidates as the position can be badly
-  // screwed by then. See XXXX-1 comment there,
+  // screwed by then. See comment there, too.
   // One could also do a pre-check ... so as not to use up a slot.
-  // ! Another reason why candidate first processing could help !
-  // Oh, but be careful with low-pt / looper tracks - propagation
-  // can really screw you there (need a maxR in candidate?).
+
+  // bool debug = true;
+
   for (int ti = itrack; ti < end; ++ti)
   {
     TrackCand  &cand = m_event_of_comb_cands.m_candidates[seed_cand_idx[ti].first][seed_cand_idx[ti].second];
     WSR_Result &w    = mkfndr->XWsrResult[ti - itrack];
 
     // XXXX-4 Low pT tracks can miss a barrel layer ... and should be stopped
-    const float cand_r = std::hypot(mkfndr->getPar(ti - itrack, MkBase::iP, 0), mkfndr->getPar(ti - itrack, MkBase::iP, 1));
-    if (region == TrackerInfo::Reg_Barrel && cand_r < layer_info.m_rin)
+    const float cand_r = std::hypot(mkfndr->getPar(ti - itrack, MkBase::iP, 0),
+                                    mkfndr->getPar(ti - itrack, MkBase::iP, 1));
+
+    dprintf("WSR Check label %d, seed %d, cand %d score %f -> wsr %d, in_gap %d\n",
+            cand.label(), seed_cand_idx[ti].first, seed_cand_idx[ti].second, cand.score(),
+            w.m_wsr, w.m_in_gap);
+
+    if (layer_info.is_barrel() && cand_r < layer_info.m_rin)
     {
-      // For now just fake outside ... and let logic below fix it.
+      // Fake outside so it does not get processed in FindTracks Std/CE... and
+      // create a stopped replica in barrel and original copy if there is
+      // still chance to hit endcaps.
       dprintf("Barrel cand propagated to r=%f ... layer is %f - %f\n", cand_r, layer_info.m_rin, layer_info.m_rout);
 
       mkfndr->XHitSize[ti - itrack] = 0;
       w.m_wsr = WSR_Outside;
+
+      tmp_cands[seed_cand_idx[ti].first - start_seed].push_back(cand);
+      if (region == TrackerInfo::Reg_Barrel)
+      {
+        dprintf(" creating extra stopped held back candidate\n");
+        tmp_cands[seed_cand_idx[ti].first - start_seed].back().addHitIdx(-2, layer_info.m_layer_id, 0);
+      }
     }
-
-    dprintf("WSR Check label %d, seed %d, cand %d -> wsr %d, in_gap %d\n",
-            cand.label(), seed_cand_idx[ti].first, seed_cand_idx[ti].second,
-            w.m_wsr, w.m_in_gap);
-
-    if (w.m_wsr == WSR_Outside)
+    else if (w.m_wsr == WSR_Outside)
     {
       dprintf(" creating extra held back candidate\n");
       tmp_cands[seed_cand_idx[ti].first - start_seed].push_back(cand);
@@ -2493,7 +2503,7 @@ void MkBuilder::fit_cands_BH(MkFinder *mkfndr, int start_cand, int end_cand, int
     // }
 
     bool chi_debug = false;
-#ifdef DEBUG_BACKWARD_FIT
+#ifdef DEBUG_BACKWARD_FIT_BH
   redo_fit:
 #endif
 
@@ -2509,7 +2519,7 @@ void MkBuilder::fit_cands_BH(MkFinder *mkfndr, int start_cand, int end_cand, int
       mkfndr->BkFitPropTracksToPCA(end - icand);
     }
 
-#ifdef DEBUG_BACKWARD_FIT
+#ifdef DEBUG_BACKWARD_FIT_BH
     // Dump tracks with pT > 2 and chi2/dof > 20. Assumes MPT_SIZE=1.
     if (! chi_debug && 1.0f/mkfndr->Par[MkBase::iP].At(0,3,0) > 2.0f &&
         mkfndr->Chi2(0,0,0) / (eoccs[icand][0].nFoundHits() * 3 - 6) > 20.0f)
@@ -2606,7 +2616,9 @@ void MkBuilder::fit_cands(MkFinder *mkfndr, int start_cand, int end_cand, int re
     if (first)
     {
       // ./mkFit ... | perl -ne 'if (/^BKF_OVERLAP/) { s/^BKF_OVERLAP //og; print; }' > bkf_ovlp.rtt
-      printf("BKF_OVERLAP event/I:label/I:prod_type/I:is_findable/I:layer/I:pt/F:eta/F:phi/F:chi2/F:isnan/I:isfin/I:gtzero/I:hit_label/I\n");
+      printf("BKF_OVERLAP event/I:label/I:prod_type/I:is_findable/I:layer/I:is_stereo/I:is_barrel/I:"
+             "pt/F:eta/F:phi/F:chi2/F:isnan/I:isfin/I:gtzero/I:hit_label/I:"
+             "sx_t/F:sy_t/F:sz_t/F:d_xy/F:d_z/F\n");
       first = false;
     }
     mkfndr->m_event = m_event;
