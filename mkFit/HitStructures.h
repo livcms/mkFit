@@ -269,12 +269,8 @@ public:
 struct HoTNode
 {
   HitOnTrack m_hot;
+  float      m_chi2;
   int        m_prev_idx;
-
-  int   m_index_ovlp = -1;
-  // Those two can go out if they turn out to not be needed
-  float m_chi2_ovlp;
-  float m_chi2;        // Only available for CE
 };
 
 struct HitMatch
@@ -399,6 +395,8 @@ public:
 
   Track exportTrack() const;
 
+  void  resetShortTrack() { score_ = getScoreWorstPossible(); m_comb_candidate = nullptr; }
+
 protected:
   CombCandidate *m_comb_candidate = nullptr;
 
@@ -422,15 +420,14 @@ inline bool sortByScoreTrackCand(const TrackCand & cand1, const TrackCand & cand
 inline float getScoreCand(const TrackCand& cand1)
 {
   unsigned int seedtype = cand1.getSeedTypeForRanking();
-  int nfoundhits = cand1.nFoundHits();
-  int nmisshits = cand1.nInsideMinusOneHits();
+  int nfoundhits   = cand1.nFoundHits();
+  int noverlaphits = cand1.nOverlapHits();
+  int nmisshits    = cand1.nInsideMinusOneHits();
   float pt = cand1.pT();
   float chi2 = cand1.chi2();
   // Do not allow for chi2<0 in score calculation
   if (chi2 < 0) chi2 = 0.f;
-  // Do not allow for chi2>2^14/2/10 in score calculation (15 bits for (int) score x 10: 14 bits for score magnitude + 1 bit for sign --> max chi2 = 1/2*1/10*2^14=819.2)
-  if (chi2 > Config::maxChi2ForRanking_) chi2 = Config::maxChi2ForRanking_;
-  return getScoreCalc(seedtype, nfoundhits, nmisshits, chi2, pt);
+  return getScoreCalc(seedtype, nfoundhits, noverlaphits, nmisshits, chi2, pt);
 }
 
 
@@ -454,17 +451,29 @@ public:
 
   CombCandidate()
   {
-    reserve(Config::maxCandsPerSeed); // we should never exceed this - XXXX check, enforce, use common storage per event
+    reserve(Config::maxCandsPerSeed); // we should never exceed this
     m_best_short_cand.setScore( getScoreWorstPossible() );
 
     // this will be different for CloneEngine and Std, especially as long as we
     // instantiate all candidates before purging them.
     // ce:  N_layer * N_cands ~~ 20 * 6 = 120
-    // std: i don't know, let's say double
-    m_hots.reserve(256);
+    // std: i don't know, maybe double?
+    m_hots.reserve(128);
 
     m_overlap_hits.resize(Config::maxCandsPerSeed);
   }
+
+  // Need this so resize of EventOfCombinedCandidates::m_candidates can reuse vectors used here.
+  CombCandidate(CombCandidate&& o) :
+    std::vector<TrackCand>(std::move(o)),
+    m_best_short_cand(std::move(o.m_best_short_cand)),
+    m_state(o.m_state),
+    m_last_seed_layer(o.m_last_seed_layer),
+    m_seed_type(o.m_seed_type),
+    m_hots_size(o.m_hots_size),
+    m_hots(std::move(o.m_hots)),
+    m_overlap_hits(std::move(o.m_overlap_hits))
+  {}
 
   void Reset()
   {
@@ -475,9 +484,9 @@ public:
 
   void ImportSeed(const Track& seed);
 
-  int AddHit(const HitOnTrack& hot, int prev_idx)
+  int AddHit(const HitOnTrack& hot, float chi2, int prev_idx)
   {
-    m_hots.push_back({hot, prev_idx});
+    m_hots.push_back({hot, chi2, prev_idx});
     return m_hots_size++;
   }
 
@@ -526,7 +535,7 @@ inline const HoTNode& TrackCand::refLastHoTNode() const
 
 inline void TrackCand::addHitIdx(int hitIdx, int hitLyr, float chi2)
 {
-  lastHitIdx_ = m_comb_candidate->AddHit({ hitIdx, hitLyr }, lastHitIdx_);
+  lastHitIdx_ = m_comb_candidate->AddHit({ hitIdx, hitLyr }, chi2, lastHitIdx_);
 
   if (hitIdx >= 0 || hitIdx == -9)
   {
@@ -557,8 +566,6 @@ public:
     m_size      (0)
   {
     Reset(size);
-
-    m_candidates.reserve(256);
   }
 
   void Reset(int new_capacity)
@@ -571,7 +578,6 @@ public:
     if (new_capacity > m_capacity)
     {
       m_candidates.resize(new_capacity);
-
       m_capacity = new_capacity;
     }
 

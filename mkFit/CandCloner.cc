@@ -45,8 +45,7 @@ void CandCloner::ProcessSeedRange(int is_beg, int is_end)
     auto extra_i = extras.begin();
     auto extra_e = extras.end();
 
-    // Extras sorted now
-    // std::sort(extras.begin(), extras.end(), sortByScoreCand);
+    // Extras are sorted by candScore.
 
 #ifdef DEBUG
     dprint("  seed n " << is << " with input candidates=" << hitsForSeed.size());
@@ -78,8 +77,7 @@ void CandCloner::ProcessSeedRange(int is_beg, int is_end)
         const IdxChi2List &h2a = hitsForSeed[ih];
 
         TrackCand tc( ccand[h2a.trkIdx] );
-        tc.addHitIdx(h2a.hitIdx, m_layer, 0);
-        tc.setChi2(h2a.chi2);
+        tc.addHitIdx(h2a.hitIdx, m_layer, h2a.chi2_hit);
         tc.setScore(h2a.score);
 
         if (h2a.hitIdx == -2)
@@ -104,14 +102,11 @@ void CandCloner::ProcessSeedRange(int is_beg, int is_end)
         if (n_pushed >= Config::maxCandsPerSeed)
           break;
 
-        // set the overlap if we have a true hit and pT > 1
+        // set the overlap if we have a true hit and pT > pTCutOverlap
         HitMatch *hm;
-        if (h2a.hitIdx >= 0 && (hm = ccand.findOverlap(h2a.trkIdx, h2a.hitIdx, h2a.module)) && tc.pT() > 1)
+        if (tc.pT() > Config::pTCutOverlap && h2a.hitIdx >= 0 && (hm = ccand.findOverlap(h2a.trkIdx, h2a.hitIdx, h2a.module)))
         {
-          tc.refLastHoTNode().m_index_ovlp = hm->m_hit_idx;
-          tc.refLastHoTNode().m_chi2_ovlp  = hm->m_chi2;
-          tc.refLastHoTNode().m_chi2       = h2a.chi2_hit;
-
+          tc.addHitIdx(hm->m_hit_idx, m_layer, hm->m_chi2);
           tc.incOverlapCount();
 
           // --- ROOT text tree dump of all used overlaps

@@ -1027,7 +1027,7 @@ void MkBuilder::quality_store_tracks(TrackVec& tracks)
       // DUMP overlap hits
       int no_good = 0;
       int no_bad  = 0;
-      int no      = 0; // total, esp for tracks that don't haev good label
+      int no      = 0; // total, esp for tracks that don't have good label
       const HoTNode *hnp = & bcand.refLastHoTNode();
       while (true)
       {
@@ -2068,25 +2068,26 @@ void MkBuilder::FindTracksStandard()
         {
           if (tmp_cands[is].size() > 0)
           {
-            eoccs[start_seed+is].clear();
+            eoccs[start_seed + is].clear();
 
             // Put good candidates into eoccs, process -2 candidates.
             int  n_placed    = 0;
             bool first_short = true;
-            for (size_t ii = 0; ii < tmp_cands[is].size() && n_placed < Config::maxCandsPerSeed; ++ii)
+            for (int ii = 0; ii < (int) tmp_cands[is].size() && n_placed < Config::maxCandsPerSeed; ++ii)
             {
+              TrackCand &tc = tmp_cands[is][ii];
+
               // See if we have an overlap hit available, but only if we have a true hit in this layer
-              if (tmp_cands[is][ii].getLastHitLyr() == curr_layer && tmp_cands[is][ii].getLastHitIdx() >= 0)
+              // and pT is above the pTCutOverlap
+              if (tc.pT() > Config::pTCutOverlap && tc.getLastHitLyr() == curr_layer && tc.getLastHitIdx() >= 0)
               {
-                TrackCand     &tc    = tmp_cands[is][ii];
-                CombCandidate &ccand = eoccs[start_seed+is];
+                CombCandidate &ccand = eoccs[start_seed + is];
 
                 HitMatch *hm = ccand.findOverlap(tc.originIndex(), tc.getLastHitIdx(), layer_of_hits.GetHit(tc.getLastHitIdx()).detIDinLayer());
+
                 if (hm)
                 {
-                  tc.refLastHoTNode().m_index_ovlp = hm->m_hit_idx;
-                  tc.refLastHoTNode().m_chi2_ovlp  = hm->m_chi2;
-
+                  tc.addHitIdx(hm->m_hit_idx, curr_layer, hm->m_chi2);
                   tc.incOverlapCount();
 
                   // --- ROOT text tree dump of all found overlaps
@@ -2108,17 +2109,17 @@ void MkBuilder::FindTracksStandard()
                 }
               }
 
-              if (tmp_cands[is][ii].getLastHitIdx() != -2)
+              if (tc.getLastHitIdx() != -2)
               {
-                eoccs[start_seed+is].emplace_back(tmp_cands[is][ii]);
+                eoccs[start_seed + is].emplace_back(tc);
                 ++n_placed;
               }
               else if (first_short)
               {
                 first_short = false;
-                if (tmp_cands[is][ii].score() > eoccs[start_seed+is].m_best_short_cand.score())
+                if (tc.score() > eoccs[start_seed + is].m_best_short_cand.score())
                 {
-                  eoccs[start_seed+is].m_best_short_cand = tmp_cands[is][ii];
+                  eoccs[start_seed + is].m_best_short_cand = tc;
                 }
               }
             }
@@ -2132,7 +2133,7 @@ void MkBuilder::FindTracksStandard()
       // final sorting
       for (int iseed = start_seed; iseed < end_seed; ++iseed)
       {
-        eoccs[iseed].MergeCandsAndBestShortOne(false, false);
+        eoccs[iseed].MergeCandsAndBestShortOne(true, true);
       }
     }); // end parallel-for over chunk of seeds within region
   }); // end of parallel-for-each over eta regions

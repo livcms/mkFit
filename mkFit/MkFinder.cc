@@ -659,8 +659,11 @@ void MkFinder::FindCandidates(const LayerOfHits                   &layer_of_hits
 	    newcand.setScore(getScoreCand(newcand));
             newcand.setOriginIndex(CandIdx(itrack, 0, 0));
 
-            CombCandidate &ccand = * newcand.combCandidate();
-            ccand.considerHitForOverlap(CandIdx(itrack, 0, 0), hit_idx, layer_of_hits.GetHit(hit_idx).detIDinLayer(), chi2);
+            if (chi2 < Config::chi2CutOverlap)
+            {
+              CombCandidate &ccand = * newcand.combCandidate();
+              ccand.considerHitForOverlap(CandIdx(itrack, 0, 0), hit_idx, layer_of_hits.GetHit(hit_idx).detIDinLayer(), chi2);
+            }
 
             dprint("updated track parameters x=" << newcand.parameters()[0] << " y=" << newcand.parameters()[1] << " z=" << newcand.parameters()[2] << " pt=" << 1./newcand.parameters()[3]);
 
@@ -770,9 +773,8 @@ void MkFinder::FindCandidatesCloneEngine(const LayerOfHits &layer_of_hits, CandC
         {
           const int hit_idx = XHitArr.At(itrack, hit_cnt, 0);
 
-          // Register hit for overlap consieration, here we apply chi2 cut
-          // NOTE --- chi2 cut NOT DONE for STD for comparison.
-          if (chi2 < 3.5)
+          // Register hit for overlap consideration, here we apply chi2 cut
+          if (chi2 < Config::chi2CutOverlap)
           {
             CombCandidate &ccand = cloner.mp_event_of_comb_candidates->m_candidates[ SeedIdx(itrack, 0, 0) ];
             ccand.considerHitForOverlap(CandIdx(itrack, 0, 0), hit_idx, layer_of_hits.GetHit(hit_idx).detIDinLayer(), chi2);
@@ -783,6 +785,7 @@ void MkFinder::FindCandidatesCloneEngine(const LayerOfHits &layer_of_hits, CandC
           tmpList.hitIdx   = hit_idx;
           tmpList.module   = layer_of_hits.GetHit(hit_idx).detIDinLayer();
           tmpList.nhits    = NFoundHits(itrack,0,0) + 1;
+          tmpList.noverlaps= NOverlapHits(itrack,0,0);
           tmpList.nholes   = num_all_minus_one_hits(itrack);
           tmpList.seedtype = SeedType(itrack, 0, 0);
           tmpList.pt       = std::abs(1.0f / Par[iP].At(itrack,3,0));
@@ -823,6 +826,7 @@ void MkFinder::FindCandidatesCloneEngine(const LayerOfHits &layer_of_hits, CandC
     tmpList.hitIdx   = fake_hit_idx;
     tmpList.module   = -1;
     tmpList.nhits    = NFoundHits(itrack,0,0);
+    tmpList.noverlaps= NOverlapHits(itrack,0,0);
     tmpList.nholes   = num_inside_minus_one_hits(itrack);
     tmpList.seedtype = SeedType(itrack, 0, 0);
     tmpList.pt       = std::abs(1.0f / Par[iP].At(itrack,3,0));
